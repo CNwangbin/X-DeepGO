@@ -1,3 +1,4 @@
+
 import os
 import time
 from collections import OrderedDict
@@ -7,7 +8,6 @@ import torch
 from torch.cuda.amp import autocast
 
 from deepfold.core.metrics.custom_metrics import compute_roc
-from deepfold.core.metrics import custom_metrics
 from deepfold.utils.metrics import AverageMeter
 from deepfold.utils.model import reduce_tensor, save_checkpoint
 from deepfold.utils.summary import update_summary
@@ -62,9 +62,7 @@ def train(model,
     for idx, batch in enumerate(loader):
         # Add batch to GPU
         batch = {key: val.cuda() for key, val in batch.items()}
-
         data_time = time.time() - end
-
         optimizer_step = ((idx + 1) % gradient_accumulation_steps) == 0
         loss = step(batch, optimizer_step)
         batch_size = batch['labels'].shape[0]
@@ -115,11 +113,12 @@ def evaluate(model, loader, use_amp, logger, log_interval=10):
             outputs = model(**batch)
             loss = outputs[0]
             logits = outputs[1]
+            preds = torch.sigmoid(logits)
+            preds = preds.detach().cpu()
 
         torch.cuda.synchronize()
 
-        preds = torch.sigmoid(logits)
-        preds = preds.detach().cpu().numpy()
+        preds = preds.numpy()
         labels = labels.to('cpu').numpy()
         true_labels.append(labels)
         pred_labels.append(preds)
@@ -152,189 +151,20 @@ def evaluate(model, loader, use_amp, logger, log_interval=10):
     pred_labels = np.concatenate(pred_labels, axis=0)
     # avg_auc
     avg_auc = compute_roc(true_labels, pred_labels)
-    # aupr = custom_metrics.compute_protein_aupr(true_labels,pred_labels)
-    metrics = OrderedDict([('loss', losses_m.avg), ('auc', avg_auc)])
+    max_f1, aupr = compute_aupr_fmax(true_labels, pred_labels)
+    metrics = OrderedDict([('loss', losses_m.avg), ('auc', avg_auc),('fmax',max_f1),('aupr',aupr)])
     return metrics
 
-
-def predict(model, loader, use_amp, logger, log_interval=10):
-    batch_time_m = AverageMeter('Time', ':6.3f')
-    data_time_m = AverageMeter('Data', ':6.3f')
-    losses_m = AverageMeter('Loss', ':.4e')
-
-    model.eval()
-    steps_per_epoch = len(loader)
-    end = time.time()
-    # Variables to gather full output
-    true_labels, pred_labels = [], []
-    for idx, batch in enumerate(loader):
-        batch = {key: val.cuda() for key, val in batch.items()}
-        labels = batch['labels']
-        labels = labels.float()
-        data_time = time.time() - end
-        with torch.no_grad(), autocast(enabled=use_amp):
-            outputs = model(**batch)
-            loss = outputs[0]
-            logits = outputs[1]
-
-        torch.cuda.synchronize()
-
-        preds = torch.sigmoid(logits)
-        preds = preds.detach().cpu().numpy()
-        labels = labels.to('cpu').numpy()
-        true_labels.append(labels)
-        pred_labels.append(preds)
-
-        batch_size = labels.shape[0]
-        data_time = time.time() - end
-        it_time = time.time() - end
-        end = time.time()
-
-        batch_time_m.update(it_time)
-        data_time_m.update(data_time)
-        losses_m.update(loss.item(), batch_size)
-        if (idx % log_interval == 0) or (idx == steps_per_epoch - 1):
-            if not torch.distributed.is_initialized(
-            ) or torch.distributed.get_rank() == 0:
-                logger_name = 'Test-log'
-                logger.info(
-                    '{0}: [{1:>2d}/{2}] '
-                    'DataTime: {data_time.val:.3f} ({data_time.avg:.3f}) '
-                    'Time: {batch_time.val:.3f} ({batch_time.avg:.3f}) '
-                    'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f}) '.format(
-                        logger_name,
-                        idx,
-                        steps_per_epoch,
-                        data_time=data_time_m,
-                        batch_time=batch_time_m,
-                        loss=losses_m))
-    # Flatten outputs
-    true_labels = np.concatenate(true_labels, axis=0)
-    pred_labels = np.concatenate(pred_labels, axis=0)
-    test_auc = compute_roc(true_labels, pred_labels)
-    metrics = OrderedDict([('loss', losses_m.avg), ('auc', test_auc)])
-    return (pred_labels, true_labels), metrics
-
-def predict_attention(model, loader, use_amp, logger, log_interval=10):
-    batch_time_m = AverageMeter('Time', ':6.3f')
-    data_time_m = AverageMeter('Data', ':6.3f')
-    losses_m = AverageMeter('Loss', ':.4e')
-
-    model.eval()
-    steps_per_epoch = len(loader)
-    end = time.time()
-    # Variables to gather full output
-    true_labels, pred_labels, attention = [], [], []
-    attention = []
-    for idx, batch in enumerate(loader):
-        batch = {key: val.cuda() for key, val in batch.items()}
-        labels = batch['labels']
-        labels = labels.float()
-        data_time = time.time() - end
-        with torch.no_grad(), autocast(enabled=use_amp):
-            outputs = model(**batch)
-            loss = outputs[0]
-            logits = outputs[1]
-            weights = outputs[2]
-        torch.cuda.synchronize()
-
-        preds = torch.sigmoid(logits)
-        preds = preds.detach().cpu().numpy()
-        labels = labels.to('cpu').numpy()
-        weights = weights.detach().cpu().numpy()
-        weights.dtype = np.float16
-        true_labels.append(labels)
-        pred_labels.append(preds)
-        attention.append(weights)
-
-        batch_size = labels.shape[0]
-        data_time = time.time() - end
-        it_time = time.time() - end
-        end = time.time()
-
-        batch_time_m.update(it_time)
-        data_time_m.update(data_time)
-        losses_m.update(loss.item(), batch_size)
-        if (idx % log_interval == 0) or (idx == steps_per_epoch - 1):
-            if not torch.distributed.is_initialized(
-            ) or torch.distributed.get_rank() == 0:
-                logger_name = 'Test-log'
-                logger.info(
-                    '{0}: [{1:>2d}/{2}] '
-                    'DataTime: {data_time.val:.3f} ({data_time.avg:.3f}) '
-                    'Time: {batch_time.val:.3f} ({batch_time.avg:.3f}) '
-                    'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f}) '.format(
-                        logger_name,
-                        idx,
-                        steps_per_epoch,
-                        data_time=data_time_m,
-                        batch_time=batch_time_m,
-                        loss=losses_m))
-    # Flatten outputs
-    true_labels = np.concatenate(true_labels, axis=0)
-    pred_labels = np.concatenate(pred_labels, axis=0)
-    attention = np.concatenate(attention, axis=0)
-    test_auc = compute_roc(true_labels, pred_labels)
-    metrics = OrderedDict([('loss', losses_m.avg), ('auc', test_auc)])
-    return (pred_labels, true_labels, attention), metrics
-
-def protlmpredict(model, loader, use_amp, logger, log_interval=10):
-    batch_time_m = AverageMeter('Time', ':6.3f')
-    data_time_m = AverageMeter('Data', ':6.3f')
-    losses_m = AverageMeter('Loss', ':.4e')
-
-    model.eval()
-    steps_per_epoch = len(loader)
-    end = time.time()
-    # Variables to gather full output
-    true_labels, pred_labels = [], []
-    for idx, batch in enumerate(loader):
-        batch = {key: val.cuda() for key, val in batch.items()}
-        labels = batch['labels']
-        labels = labels.float()
-        data_time = time.time() - end
-        with torch.no_grad(), autocast(enabled=use_amp):
-            outputs = model(**batch)
-            loss = outputs[0] if isinstance(outputs, tuple) else outputs.loss
-            logits = outputs[1] if isinstance(outputs,
-                                              tuple) else outputs.logits
-
-        preds = torch.sigmoid(logits)
-        preds = preds.detach().cpu().numpy()
-        labels = labels.to('cpu').numpy()
-        true_labels.append(labels)
-        pred_labels.append(preds)
-
-        batch_size = labels.shape[0]
-        data_time = time.time() - end
-        it_time = time.time() - end
-        end = time.time()
-
-        batch_time_m.update(it_time)
-        data_time_m.update(data_time)
-        losses_m.update(loss.item(), batch_size)
-        if (idx % log_interval == 0) or (idx == steps_per_epoch - 1):
-            if not torch.distributed.is_initialized(
-            ) or torch.distributed.get_rank() == 0:
-                logger_name = 'Test-log'
-                logger.info(
-                    '{0}: [{1:>2d}/{2}] '
-                    'DataTime: {data_time.val:.3f} ({data_time.avg:.3f}) '
-                    'Time: {batch_time.val:.3f} ({batch_time.avg:.3f}) '
-                    'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f}) '.format(
-                        logger_name,
-                        idx,
-                        steps_per_epoch,
-                        data_time=data_time_m,
-                        batch_time=batch_time_m,
-                        loss=losses_m))
-    # Flatten outputs
-    true_labels = np.concatenate(true_labels, axis=0)
-    pred_labels = np.concatenate(pred_labels, axis=0)
-    test_auc = compute_roc(true_labels, pred_labels)
-    metrics = OrderedDict([('loss', losses_m.avg), ('auc', test_auc)])
-    return (pred_labels, true_labels), metrics
-
+from sklearn import metrics
+def compute_aupr_fmax(labels, preds):
+    precision,recall,threshold = metrics.precision_recall_curve(labels.flatten(), preds.flatten())
+    numerator = 2 * recall * precision
+    denom = recall + precision
+    f1_scores = np.divide(numerator, denom, out=np.zeros_like(denom), where=(denom!=0))
+    max_f1 = np.max(f1_scores)
+    max_f1_thresh = threshold[np.argmax(f1_scores)]
+    aupr= metrics.auc(recall,precision)
+    return max_f1, aupr
 
 def train_loop(model,
                optimizer,
@@ -352,9 +182,8 @@ def train_loop(model,
                skip_validation=True,
                save_checkpoints=True,
                output_dir='./',
-               log_wandb=False,
+               log_wandb=True,
                log_interval=10):
-    is_best = True
     if early_stopping_patience > 0:
         epochs_since_improvement = 0
 
@@ -364,6 +193,7 @@ def train_loop(model,
     logger.info('Evaluation: %s' % (eval_metrics))
     logger.info(f'RUNNING EPOCHS FROM {start_epoch} TO {end_epoch}')
     for epoch in range(start_epoch, end_epoch):
+        is_best = False
         if not skip_training:
             train_metrics = train(model, train_loader, optimizer, scaler,
                                   gradient_accumulation_steps, use_amp, epoch,
@@ -378,10 +208,9 @@ def train_loop(model,
             logger.info('[Epoch %d] Evaluation: %s' %
                         (epoch + 1, eval_metrics))
 
-        if eval_metrics['auc'] > best_metric:
+        if eval_metrics['fmax'] > best_metric:
             is_best = True
-            best_metric = eval_metrics['auc']
-
+            best_metric = eval_metrics['fmax']
         if log_wandb and (not torch.distributed.is_initialized()
                           or torch.distributed.get_rank() == 0):
             update_summary(epoch,
@@ -396,7 +225,7 @@ def train_loop(model,
             checkpoint_state = {
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
-                'best_metric': eval_metrics['loss'],
+                'best_metric': eval_metrics['fmax'],
                 'optimizer': optimizer.state_dict(),
             }
             logger.info('[*] Saving model epoch %d...' % (epoch + 1))

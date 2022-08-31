@@ -2,9 +2,7 @@ import math
 import os
 import sys
 from collections import Counter, defaultdict
-
 import pandas as pd
-
 from deepfold.data.utils.ontology import Ontology
 
 sys.path.append('../')
@@ -16,7 +14,7 @@ def statistic_terms(train_data_path):
     train_data = pd.read_pickle(train_data_path)
     cnt = Counter()
     for i, row in train_data.iterrows():
-        for term in row['annotations']:
+        for term in row['prop_annotations']:
             cnt[term] += 1
     print('Number of annotated terms:', len(cnt))
     sorted_by_freq_tuples = sorted(cnt.items(), key=lambda x: x[0])
@@ -144,7 +142,7 @@ def calculate_information_contents_of_GO_terms(input_go_cnt_file, children,
 
 
 # make final edge file
-def get_all_go_cnt(edges, go_cnt, all_children, go_ic):
+def get_all_go_cnt(edges, go_cnt, all_children, go_ic):#[(child,parent)]#{t：[]},{"t",ic}
     all_go_cnt = []
     for children, parent in edges:
         cnt_every = 0.0
@@ -158,28 +156,28 @@ def get_all_go_cnt(edges, go_cnt, all_children, go_ic):
         if parent in go_cnt.keys():
             cnt_freq_parent = go_cnt[parent]
         if cnt_freq_parent == 0.0 or cnt_freq_children == 0.0:
-            cnt_freq = 1.0
+            cnt_freq = 1.0 #默认值设定不一定要这么大
         else:
             cnt_freq = cnt_freq_children / cnt_freq_parent
 
-        if parent in all_children:
+        if parent in all_children: # assert
             for x in all_children[parent]:
                 if x in go_ic.keys():
                     cnt_every += go_ic[x]
 
-        if parent in go_ic.keys():
+        if parent in go_ic.keys(): #为什么加父节点IC
             cnt_every += go_ic[parent]
         if children in go_ic.keys():
             cnt_chidren += go_ic[children]
 
-        cnt_every += cnt_chidren
+        cnt_every += cnt_chidren # 为什么加子节点 
         final_cnt = (cnt_chidren / cnt_every) + cnt_freq
         all_go_cnt.append((children, parent, final_cnt))
     return all_go_cnt
 
 
-def get_go_ic(namespace='bpo', data_path=None):
-    go_file = os.path.join(data_path, 'go_cafa3.obo')
+def get_go_ic(namespace='bpo', go_file_name='go_cafa3.obo', data_path=None):
+    go_file = os.path.join(data_path, go_file_name)
     train_data_file = os.path.join(data_path, namespace,
                                    namespace + '_train_data.pkl')
     freq_dict = statistic_terms(train_data_file)
@@ -194,10 +192,10 @@ def get_go_ic(namespace='bpo', data_path=None):
 
 if __name__ == '__main__':
     data_path = '../../data/cafa3'
-    all_go_bpo_cnt = get_go_ic('bpo', data_path)
+    all_go_bpo_cnt = get_go_ic('bpo',go_file_name='go_cafa3.obo', data_path=data_path)
     print(f'edges in bpo: {len(all_go_bpo_cnt)}')
     # print(f'nodes in bpo:{}')
-    all_go_mfo_cnt = get_go_ic('mfo', data_path)
+    all_go_mfo_cnt = get_go_ic('mfo', go_file_name='go_cafa3.obo', data_path=data_path)
     print(f'edges in mfo: {len(all_go_mfo_cnt)}')
-    all_go_cco_cnt = get_go_ic('cco', data_path)
+    all_go_cco_cnt = get_go_ic('cco', go_file_name='go_cafa3.obo', data_path=data_path)
     print(f'edges in cco: {len(all_go_cco_cnt)}')

@@ -1,8 +1,9 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
 from . import losses
 from .layers import Distance2logprob
+
 
 class Embedder(tf.keras.Model):
     def _build(vocab_sz, embedding_sz):
@@ -16,18 +17,21 @@ class Embedder(tf.keras.Model):
 
         y = tf.keras.layers.Dense(
             vocab_sz,
-            kernel_initializer=tf.keras.initializers.GlorotUniform(seed=1234))(hidden)
+            kernel_initializer=tf.keras.initializers.GlorotUniform(
+                seed=1234))(hidden)
         y = tf.keras.layers.Activation('softmax', name='ance')(y)
 
         # predict namespace (BP, CC, & MF)
         z = tf.keras.layers.Dense(
             3,
-            kernel_initializer=tf.keras.initializers.GlorotUniform(seed=1234))(hidden)
+            kernel_initializer=tf.keras.initializers.GlorotUniform(
+                seed=1234))(hidden)
         z = tf.keras.layers.Activation('softmax', name='name')(z)
 
         w = tf.keras.layers.Dense(
             vocab_sz,
-            kernel_initializer=tf.keras.initializers.GlorotUniform(seed=1234))(hidden)
+            kernel_initializer=tf.keras.initializers.GlorotUniform(
+                seed=1234))(hidden)
         w = tf.keras.layers.Activation('softmax', name='auto')(w)
 
         return tf.keras.Model(inputs, [y, z, w])
@@ -38,18 +42,19 @@ class Embedder(tf.keras.Model):
 
         optimizer = tf.keras.optimizers.Adam()
 
-        model.compile(optimizer=optimizer,
-                      loss=[
-                          losses.Word2vecLoss(),
-                          tf.keras.losses.CategoricalCrossentropy(),
-                          losses.Word2vecLoss(),
-                      ],
-                      metrics={
-                          'ance': tf.keras.metrics.Recall(name='rc'),
-                          'name': tf.keras.metrics.CategoricalAccuracy(name='ac'),
-                          'auto': tf.keras.metrics.MeanSquaredError(name='ms'),
-                      },
-                      #run_eagerly=True,
+        model.compile(
+            optimizer=optimizer,
+            loss=[
+                losses.Word2vecLoss(),
+                tf.keras.losses.CategoricalCrossentropy(),
+                losses.Word2vecLoss(),
+            ],
+            metrics={
+                'ance': tf.keras.metrics.Recall(name='rc'),
+                'name': tf.keras.metrics.CategoricalAccuracy(name='ac'),
+                'auto': tf.keras.metrics.MeanSquaredError(name='ms'),
+            },
+            #run_eagerly=True,
         )
 
         return model
@@ -62,18 +67,18 @@ class Embedder(tf.keras.Model):
 
         # update loss
         self.compiled_metrics.update_state(y, y_pred, [])
-        self.metrics[4].update_state(y[0], y_pred[0]) # neighbors
-        self.metrics[5].update_state(y[1], y_pred[1]) # namespace
-        self.metrics[6].update_state(y[2], y_pred[2]) # auto
+        self.metrics[4].update_state(y[0], y_pred[0])  # neighbors
+        self.metrics[5].update_state(y[1], y_pred[1])  # namespace
+        self.metrics[6].update_state(y[2], y_pred[2])  # auto
 
-        return { m.name: m.result() for m in self.metrics }
+        return {m.name: m.result() for m in self.metrics}
 
     @tf.function
     def train_step(self, batch):
         x, y = batch
 
         with tf.GradientTape() as tape:
-            y_pred = self(x, training=True) # forward pass
+            y_pred = self(x, training=True)  # forward pass
             loss = self.compiled_loss(y, y_pred)
             #loss +=  self.foo_loss(y_pred[0], y[1]) # second-order NCA
 
@@ -85,11 +90,11 @@ class Embedder(tf.keras.Model):
 
         # update loss
         self.compiled_metrics.update_state(y, y_pred, [])
-        self.metrics[4].update_state(y[0], y_pred[0]) # neighbors
-        self.metrics[5].update_state(y[1], y_pred[1]) # namespace
-        self.metrics[6].update_state(y[2], y_pred[2]) # auto
+        self.metrics[4].update_state(y[0], y_pred[0])  # neighbors
+        self.metrics[5].update_state(y[1], y_pred[1])  # namespace
+        self.metrics[6].update_state(y[2], y_pred[2])  # auto
 
-        return { m.name: m.result() for m in self.metrics }
+        return {m.name: m.result() for m in self.metrics}
 
     def reset_states(self):
         super().reset_metrics()

@@ -1,13 +1,16 @@
 import tensorflow as tf
 
+
 class NeighborRecoveryLoss(tf.keras.losses.Loss):
-    def __init__(self, from_logits=False,
+    def __init__(self,
+                 from_logits=False,
                  reduction=tf.keras.losses.Reduction.AUTO,
                  name='recovery_error'):
         super().__init__(reduction=reduction, name=name)
 
     def call(self, y_true, y_pred, sample_weight=None):
-        """To calculate loss, log probabilities assigned only to neighbors are used.
+        """To calculate loss, log probabilities assigned only to neighbors are
+        used.
 
         Args:
         y_true: neighbors
@@ -26,8 +29,10 @@ class NeighborRecoveryLoss(tf.keras.losses.Loss):
         config = super(NeighborRecoveryLoss, self).get_config()
         return config
 
+
 class Word2vecLoss(tf.keras.losses.Loss):
-    def __init__(self, from_logits=False,
+    def __init__(self,
+                 from_logits=False,
                  reduction=tf.keras.losses.Reduction.AUTO,
                  name='recovery_error'):
         super().__init__(reduction=reduction, name=name)

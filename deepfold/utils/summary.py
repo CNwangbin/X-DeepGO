@@ -32,8 +32,8 @@ def update_summary(epoch,
                    train_metrics,
                    eval_metrics,
                    filename,
-                   write_header=False,
-                   log_wandb=False):
+                   write_header=True,
+                   log_wandb=True):
     rowd = OrderedDict(epoch=epoch)
     rowd.update([('train_' + k, v) for k, v in train_metrics.items()])
     rowd.update([('eval_' + k, v) for k, v in eval_metrics.items()])

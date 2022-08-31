@@ -1,10 +1,16 @@
-from . import onto
 import numpy as np
 import tensorflow as tf
 
+from . import onto
+
+
 class Dataset:
-    def __init__(
-            self, tokenizer, batch_sz=4, buffer_sz=1000, shuffle=True, seed=65):
+    def __init__(self,
+                 tokenizer,
+                 batch_sz=4,
+                 buffer_sz=1000,
+                 shuffle=True,
+                 seed=65):
         self.tok = tokenizer
         self.buffer_sz = buffer_sz
         self.batch_sz = batch_sz
@@ -39,8 +45,9 @@ class Dataset:
                 ancestors = self.tok.go.get_ancestors(t)
                 ancestors = set([t for a in ancestors for t in a])
 
-                datapoint = '{}\t{}\t{}\n'.format(
-                    t, '!'.join(sorted(ancestors)), name2code[namespace])
+                datapoint = '{}\t{}\t{}\n'.format(t,
+                                                  '!'.join(sorted(ancestors)),
+                                                  name2code[namespace])
 
                 f.write(datapoint)
 
@@ -53,7 +60,9 @@ class Dataset:
                 for a in f:
                     term, neighbors, namespace = a.strip().split('\t')
                     term = self.tok.term2index[term]
-                    neighbors = [self.tok.term2index[t] for t in neighbors.split('!')]
+                    neighbors = [
+                        self.tok.term2index[t] for t in neighbors.split('!')
+                    ]
                     namespace = int(namespace)
 
                     # term
@@ -75,10 +84,9 @@ class Dataset:
 
         types = (tf.float32, (tf.float32, tf.float32, tf.float32))
         shapes = (self.tok.vocab_sz, (self.tok.vocab_sz, 3, self.tok.vocab_sz))
-        data = tf.data.Dataset.from_generator(
-            generator,
-            output_types=types,
-            output_shapes=shapes)
+        data = tf.data.Dataset.from_generator(generator,
+                                              output_types=types,
+                                              output_shapes=shapes)
 
         if self.shuffle:
             data = data.shuffle(self.buffer_sz,

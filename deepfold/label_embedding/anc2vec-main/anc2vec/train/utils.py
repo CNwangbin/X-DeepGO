@@ -5,7 +5,7 @@ class Tokenizer():
         self.terms = sorted(list(set(go.ont.keys())))
         self.vocab_sz = len(self.terms)
         # zero is padding
-        self.term2index = dict(
-        [(term, i) for i, term in enumerate(self.terms)])
-        self.index2term = dict(
-        [(i, term) for i, term in enumerate(self.terms)])
+        self.term2index = dict([(term, i)
+                                for i, term in enumerate(self.terms)])
+        self.index2term = dict([(i, term)
+                                for i, term in enumerate(self.terms)])

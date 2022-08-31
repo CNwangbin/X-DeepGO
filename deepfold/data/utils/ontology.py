@@ -12,7 +12,7 @@ class Ontology(object):
     def __init__(self,
                  filename='data/go.obo',
                  with_rels=False,
-                 include_alt_id=False):
+                 include_alt_id=True):
         super().__init__()
         self.ont, self.format_version, self.data_version = self.load(
             filename, with_rels, include_alt_id)

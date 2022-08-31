@@ -15,6 +15,10 @@ def compute_roc(labels, preds):
     roc_auc = auc(fpr, tpr)
     return roc_auc
 
+def compute_aupr(labels, preds):
+    precision,recall,threshold = metrics.precision_recall_curve(labels.flatten(), preds.flatten())
+    aupr= auc(recall,precision)
+    return aupr
 
 def compute_auc_score(labels, preds, average='macro'):
     # ROC AUC score

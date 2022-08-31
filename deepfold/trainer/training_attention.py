@@ -349,5 +349,5 @@ def train_loop(model,
                 epochs_since_improvement = 0
             if epochs_since_improvement >= early_stopping_patience:
                 break
-
-        lr_scheduler.step()
+        if lr_scheduler is not None:
+            lr_scheduler.step()

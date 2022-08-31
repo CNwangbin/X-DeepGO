@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-import sys
 import gzip
+import math
+import sys
+from collections import Counter, deque
+
 # for testing!
 # from goatools.obo_parser import GODag
 # from goatools.godag.go_tasks import get_go2parents
-
-from collections import deque, Counter
-import math
 
 # root terms
 BIOLOGICAL_PROCESS = 'GO:0008150'
@@ -31,11 +31,14 @@ namespace2go = {
     'biological_process': BIOLOGICAL_PROCESS
 }
 
+
 class Ontology(object):
-    def __init__(self, filename='data/go.obo', with_rels=False, remove_obs=True, include_alt_ids=True):
-        """
-        if with_rels=False only consider is_a as relationship
-        """
+    def __init__(self,
+                 filename='data/go.obo',
+                 with_rels=False,
+                 remove_obs=True,
+                 include_alt_ids=True):
+        """if with_rels=False only consider is_a as relationship."""
         self.fname = filename
         self.remove_obs = remove_obs
         self.include_alt_ids = include_alt_ids
@@ -73,14 +76,14 @@ class Ontology(object):
                 else:
                     if obj is None:
                         continue
-                    l = line.split(": ")
+                    l = line.split(': ')
                     if l[0] == 'id':
                         obj['id'] = l[1]
                     elif l[0] == 'alt_id':
                         obj['alt_ids'].add(l[1])
                         #breakpoint()
-                       # avoid storing the main id as alternative id
-                        # obj['alt_ids'] -= set([obj['id']])
+                    # avoid storing the main id as alternative id
+                    # obj['alt_ids'] -= set([obj['id']])
                     elif l[0] == 'namespace':
                         obj['namespace'] = l[1]
                     elif l[0] == 'is_a':
@@ -102,7 +105,8 @@ class Ontology(object):
         #
         for term_id in list(ont.keys()):
             if self.include_alt_ids:
-                for t_id in ont[term_id]['alt_ids']: # add alt_ids as ontology terms
+                for t_id in ont[term_id][
+                        'alt_ids']:  # add alt_ids as ontology terms
                     ont[t_id] = ont[term_id]
             if self.remove_obs and ont[term_id]['is_obsolete']:
                 del ont[term_id]
@@ -122,7 +126,7 @@ class Ontology(object):
                     ont[p_id]['children'].add(term_id)
         # generate leaves
         for term_id, val in ont.items():
-            if len(val['children']) == 0: # no children
+            if len(val['children']) == 0:  # no children
                 root_id = FUNC_DICT[val['namespace']]
                 #self.leaves[root_id].add(term_id)
                 self.leaves.append(term_id)
@@ -144,7 +148,7 @@ class Ontology(object):
             return [[term_id]]
         branches = []
         for parent_id in parents:
-            branches += [ b + [term_id] for b in self.get_ancestors(parent_id) ]
+            branches += [b + [term_id] for b in self.get_ancestors(parent_id)]
         return branches
 
     def get_namespace_terms(self, namespace):
@@ -155,5 +159,16 @@ class Ontology(object):
         return terms
 
     def get_blanket(self, term_id):
-        return set(self.ont[term_id]['is_a']) | self.ont[term_id]['children'] | set(self.ont[term_id]['part_of']) | set(self.ont[term_id]['has_part']) | set(self.ont[term_id]['regulates']) | set(self.ont[term_id]['negatively_regulates']) | set(self.ont[term_id]['positively_regulates']) | set(self.ont[term_id]['occurs_in']) | set(self.ont[term_id]['ends_during']) | set(self.ont[term_id]['happens_during'])
+        return set(
+            self.ont[term_id]['is_a']) | self.ont[term_id]['children'] | set(
+                self.ont[term_id]
+                ['part_of']) | set(self.ont[term_id]['has_part']) | set(
+                    self.ont[term_id]['regulates']) | set(
+                        self.ont[term_id]['negatively_regulates']) | set(
+                            self.ont[term_id]['positively_regulates']) | set(
+                                self.ont[term_id]['occurs_in']) | set(
+                                    self.ont[term_id]['ends_during']) | set(
+                                        self.ont[term_id]['happens_during'])
+
+
 #
